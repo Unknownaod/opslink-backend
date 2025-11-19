@@ -1,20 +1,27 @@
 import mongoose from "mongoose";
 
 const CivilianSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, required: true },
-  communityId: { type: mongoose.Schema.Types.ObjectId, required: false },
+
+  communityId: { type: mongoose.Schema.Types.ObjectId, required: true },
 
   name: { type: String, required: true },
   dob: { type: String },
   address: { type: String },
+  phone: { type: String },
 
-  license: { type: String, default: "Valid" },
+  licenses: {
+    driver: { type: String, default: "none" },     // valid | suspended | none
+    firearm: { type: String, default: "none" },    // valid | revoked | none
+    boating: { type: String, default: "none" },
+    pilot: { type: String, default: "none" }
+  },
 
-  notes: { type: String, default: "" },
+  vehicles: [{ type: mongoose.Schema.Types.ObjectId, ref: "Vehicle" }],
 
-  warrants: { type: [String], default: [] },
-
-  vehicles: { type: [mongoose.Schema.Types.ObjectId], ref: "Vehicle", default: [] }
+  warrants: { type: Array, default: [] },
+  flags: { type: Array, default: [] },
+  notes: { type: Array, default: [] },
+  history: { type: Array, default: [] }
 
 }, { timestamps: true });
 
