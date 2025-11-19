@@ -20,12 +20,10 @@ const app = express();
 // CORS (safe anywhere)
 app.use(cors());
 
-// ❌ REMOVE express.json() — this breaks Stripe webhook
-// app.use(express.json());
+// ❌ DO NOT PUT express.json() HERE
+// It would break Stripe webhook
 
-// 👍 Let server.js handle JSON AFTER the webhook
-
-// Base API routes (these will get JSON parsing from server.js)
+// Base API routes (JSON will be applied in server.js)
 app.use("/auth", authRoutes);
 app.use("/community", communityRoutes);
 app.use("/departments", departmentRoutes);
