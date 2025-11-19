@@ -64,33 +64,33 @@ router.get("/my", auth, async (req, res) => {
       return res.json([]);
     }
 
-    // Extract community IDs
+    // list of IDs user has saved
     const ids = user.communities.map(c => c.communityId.toString());
 
-    // Fetch communities that still exist in the database
-    const communities = await Community.find({ _id: { $in: ids } });
+    // find ALL existing communities in DB
+    const existing = await Community.find({ _id: { $in: ids } });
 
-    // Build array of valid IDs (existing in DB)
-    const validIds = communities.map(c => c._id.toString());
+    // list of REAL DB IDs
+    const validIds = existing.map(c => c._id.toString());
 
-    // Clean ghost entries from user.communities
+    // filter out ghost IDs
     const cleaned = user.communities.filter(c =>
       validIds.includes(c.communityId.toString())
     );
 
+    // if a ghost entry was found, fix the DB
     if (cleaned.length !== user.communities.length) {
       user.communities = cleaned;
       await user.save();
     }
 
-    // Return existing communities only
-    return res.json(communities);
+    res.json(existing);
 
   } catch (err) {
-    console.error("ERROR in /community/my:", err);
     res.status(500).json({ message: err.message });
   }
 });
+
 
 
 
@@ -291,5 +291,6 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 export default router;
+
 
 
