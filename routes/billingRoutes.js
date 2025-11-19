@@ -43,8 +43,8 @@ router.post("/create-subscription", auth, async (req, res) => {
       expand: ["latest_invoice.payment_intent"]
     });
 
-    // Save subscription ID for later
     user.subscriptionId = subscription.id;
+    user.cancelAtPeriodEnd = false;
     await user.save();
 
     res.json({
@@ -70,6 +70,7 @@ router.get("/status", auth, async (req, res) => {
       subscription: user.subscription || "free",
       subscriptionId: user.subscriptionId || null,
       renews: user.planRenews || null,
+      cancelAtPeriodEnd: user.cancelAtPeriodEnd || false,
       stripeCustomerId: user.stripeCustomerId || null
     });
 
@@ -89,7 +90,6 @@ router.post("/cancel", auth, async (req, res) => {
     if (!user.subscriptionId)
       return res.status(400).json({ message: "No active subscription found." });
 
-    // Cancel at end of period (keeps access until end date)
     const canceled = await stripe.subscriptions.update(user.subscriptionId, {
       cancel_at_period_end: true
     });
@@ -118,7 +118,7 @@ router.post("/reactivate", auth, async (req, res) => {
     const user = await User.findById(req.user.userId);
 
     if (!user.subscriptionId)
-      return res.status(400).json({ message: "No subscription found." });
+      return res.status(400).json({ message: "No subscription to reactivate." });
 
     const reactivated = await stripe.subscriptions.update(user.subscriptionId, {
       cancel_at_period_end: false
