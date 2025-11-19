@@ -1,41 +1,15 @@
 import http from "http";
+import express from "express";
 import { Server } from "socket.io";
-import app from "./app.js";
 import cors from "cors";
+
 import billingRoutes from "./routes/billingRoutes.js";
+import User from "./models/User.js";
+import Stripe from "stripe";
 
-/// STRIPE PAYMENT
-app.use("/billing", billingRoutes);
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-// Webhook (must be BEFORE body parser!)
-app.post("/billing/webhook", express.raw({ type: "application/json" }), (req, res) => {
-  try {
-    const sig = req.headers["stripe-signature"];
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-
-    if (event.type === "invoice.payment_succeeded") {
-      const data = event.data.object;
-
-      // identify user
-      const customerId = data.customer;
-
-      User.findOneAndUpdate(
-        { stripeCustomerId: customerId },
-        { subscription: "premier" }
-      ).catch(console.error);
-    }
-
-    res.json({ received: true });
-  } catch (err) {
-    console.log(err);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-});
-
+import app from "./app.js"; // Make sure app.js does NOT have express.json() before webhook!
 
 // ========================
 // 🔧 REQUIRED CORS CONFIG
@@ -46,7 +20,6 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// Fix OPTIONS preflight globally (Render requires this)
 app.options("*", (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -56,6 +29,57 @@ app.options("*", (req, res) => {
   );
   return res.sendStatus(200);
 });
+
+
+// =======================================================
+// 🚨 STRIPE WEBHOOK — MUST BE FIRST ROUTE (BEFORE JSON)
+// =======================================================
+
+app.post(
+  "/billing/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let event;
+
+    try {
+      const sig = req.headers["stripe-signature"];
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ Webhook Error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // 🔥 Every successful payment
+    if (event.type === "invoice.payment_succeeded") {
+      const invoice = event.data.object;
+      const customerId = invoice.customer;
+
+      await User.findOneAndUpdate(
+        { stripeCustomerId: customerId },
+        {
+          subscription: "premier",
+          cancelAtPeriodEnd: false,
+          planRenews: new Date(invoice.lines.data[0].period.end * 1000),
+          subscriptionId: invoice.subscription
+        }
+      );
+    }
+
+    return res.json({ received: true });
+  }
+);
+
+
+// =======================================================
+// AFTER WEBHOOK: now parse JSON for the REST of the API
+// =======================================================
+app.use(express.json());
+app.use("/billing", billingRoutes);
+
 
 // Render health check
 app.get("/", (req, res) => {
@@ -70,6 +94,7 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK", uptime: process.uptime() });
 });
 
+
 // Create HTTP server
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
@@ -82,13 +107,11 @@ const io = new Server(server, {
   }
 });
 
-// Attach io BEFORE routes
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// SOCKET.IO EVENTS
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
@@ -103,9 +126,6 @@ io.on("connection", (socket) => {
   );
 });
 
-// START SERVER
 server.listen(PORT, () => {
   console.log(`🚀 OpsLink API running on port ${PORT}`);
 });
-
-
