@@ -2,6 +2,40 @@ import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
 import cors from "cors";
+import billingRoutes from "./routes/billingRoutes.js";
+
+/// STRIPE PAYMENT
+app.use("/billing", billingRoutes);
+
+// Webhook (must be BEFORE body parser!)
+app.post("/billing/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  try {
+    const sig = req.headers["stripe-signature"];
+    const event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+
+    if (event.type === "invoice.payment_succeeded") {
+      const data = event.data.object;
+
+      // identify user
+      const customerId = data.customer;
+
+      User.findOneAndUpdate(
+        { stripeCustomerId: customerId },
+        { subscription: "premier" }
+      ).catch(console.error);
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.log(err);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});
+
 
 // ========================
 // 🔧 REQUIRED CORS CONFIG
@@ -73,4 +107,5 @@ io.on("connection", (socket) => {
 server.listen(PORT, () => {
   console.log(`🚀 OpsLink API running on port ${PORT}`);
 });
+
 
