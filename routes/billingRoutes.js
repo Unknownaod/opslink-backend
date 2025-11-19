@@ -7,25 +7,27 @@ const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 /* ======================================================
-   CREATE SUBSCRIPTION
+   CREATE SUBSCRIPTION (Custom Checkout Flow)
 ====================================================== */
 router.post("/create-subscription", auth, async (req, res) => {
   try {
     const userId = req.user.userId;
     const user = await User.findById(userId);
 
+    const { fullname, email, address, city, country, zip } = req.body;
+
     let customer;
 
-    // Create Stripe customer if new
+    // Create Stripe customer on first purchase
     if (!user.stripeCustomerId) {
       customer = await stripe.customers.create({
-        email: req.body.email,
-        name: req.body.fullname,
+        email,
+        name: fullname,
         address: {
-          line1: req.body.address,
-          city: req.body.city,
-          postal_code: req.body.zip,
-          country: req.body.country
+          line1: address,
+          city,
+          country,
+          postal_code: zip
         }
       });
 
@@ -35,7 +37,7 @@ router.post("/create-subscription", auth, async (req, res) => {
       customer = await stripe.customers.retrieve(user.stripeCustomerId);
     }
 
-    // Create subscription
+    // Create subscription + pending payment intent
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: process.env.STRIPE_PREMIER_PRICE_ID }],
@@ -54,58 +56,91 @@ router.post("/create-subscription", auth, async (req, res) => {
 
   } catch (err) {
     console.log("CREATE SUB ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Stripe subscription failed." });
   }
 });
 
 
 /* ======================================================
-   GET SUBSCRIPTION STATUS
+   GET CUSTOMER & SUBSCRIPTION (dashboard uses this)
 ====================================================== */
-router.get("/status", auth, async (req, res) => {
+router.get("/customer", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
 
+    if (!user.stripeCustomerId) {
+      return res.json({
+        subscription: { status: "free" }
+      });
+    }
+
+    // Get subscription details from Stripe
+    let subscription = null;
+    if (user.subscriptionId) {
+      subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
+    }
+
     res.json({
-      subscription: user.subscription || "free",
-      subscriptionId: user.subscriptionId || null,
-      renews: user.planRenews || null,
-      cancelAtPeriodEnd: user.cancelAtPeriodEnd || false,
-      stripeCustomerId: user.stripeCustomerId || null
+      subscription: subscription
+        ? { status: subscription.status }
+        : { status: "free" },
+      customerId: user.stripeCustomerId
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to load subscription." });
   }
 });
 
 
 /* ======================================================
-   CANCEL SUBSCRIPTION (at next renewal)
+   STRIPE BILLING PORTAL (manage subscription)
+====================================================== */
+router.get("/portal", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+
+    if (!user.stripeCustomerId) {
+      return res.status(400).json({ message: "No Stripe customer found." });
+    }
+
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: process.env.RETURN_URL || "https://opslink.app/dashboard.html"
+    });
+
+    res.json({ url: portal.url });
+
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create portal session." });
+  }
+});
+
+
+/* ======================================================
+   CANCEL SUBSCRIPTION (End of current period)
 ====================================================== */
 router.post("/cancel", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
 
     if (!user.subscriptionId)
-      return res.status(400).json({ message: "No active subscription found." });
+      return res.status(400).json({ message: "No active subscription." });
 
     const canceled = await stripe.subscriptions.update(user.subscriptionId, {
       cancel_at_period_end: true
     });
 
-    user.planRenews = canceled.current_period_end * 1000;
     user.cancelAtPeriodEnd = true;
+    user.planRenews = canceled.current_period_end * 1000;
     await user.save();
 
     res.json({
-      message: "Your subscription will end at the next billing period.",
-      endDate: new Date(user.planRenews)
+      message: "Subscription will end at the end of the billing cycle."
     });
 
   } catch (err) {
-    console.log("CANCEL ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to cancel subscription." });
   }
 });
 
@@ -129,15 +164,12 @@ router.post("/reactivate", auth, async (req, res) => {
     await user.save();
 
     res.json({
-      message: "Subscription reactivated!",
-      renews: new Date(user.planRenews)
+      message: "Subscription reactivated!"
     });
 
   } catch (err) {
-    console.log("REACTIVATE ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to reactivate subscription." });
   }
 });
-
 
 export default router;
