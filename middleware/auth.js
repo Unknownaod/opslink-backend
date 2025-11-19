@@ -6,7 +6,12 @@ export function auth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+
+    // normalize the field name regardless of what was signed
+    req.user = {
+      userId: decoded.userId || decoded.id || decoded._id
+    };
+
     next();
   } catch {
     return res.status(401).json({ message: "Invalid token" });
