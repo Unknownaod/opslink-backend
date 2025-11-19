@@ -6,16 +6,16 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
-/* ============================
+/* ============================================
    KEY GENERATOR
-============================ */
+============================================ */
 function generateKey(prefix) {
   return prefix.toUpperCase() + "-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-/* ============================
+/* ============================================
    CREATE COMMUNITY
-============================ */
+============================================ */
 router.post("/create", auth, async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -25,7 +25,6 @@ router.post("/create", auth, async (req, res) => {
       ownerId: userId,
       name,
       description,
-
       permissionKeys: {
         leo: generateKey("LEO"),
         fire: generateKey("FIRE"),
@@ -33,14 +32,14 @@ router.post("/create", auth, async (req, res) => {
         supervisor: generateKey("SUP"),
         admin: generateKey("ADMIN")
       },
-
       members: [
         {
           userId,
           role: "owner",
           permissions: ["leo", "fire", "dispatch", "supervisor", "admin"]
         }
-      ]
+      ],
+      ranks: []
     });
 
     await User.findByIdAndUpdate(userId, {
@@ -48,15 +47,14 @@ router.post("/create", auth, async (req, res) => {
     });
 
     res.status(201).json(community);
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-/* ============================
+/* ============================================
    JOIN COMMUNITY
-============================ */
+============================================ */
 router.post("/join", auth, async (req, res) => {
   try {
     const { communityId } = req.body;
@@ -65,30 +63,31 @@ router.post("/join", auth, async (req, res) => {
     const community = await Community.findById(communityId);
     if (!community) return res.status(404).json({ message: "Community not found" });
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    // Already a member?
     if (community.members.some(m => m.userId.toString() === userId)) {
       return res.status(400).json({ message: "Already in this community" });
     }
 
-    community.members.push({ userId, role: "member", permissions: [] });
+    community.members.push({
+      userId,
+      role: "member",
+      permissions: []
+    });
+
     await community.save();
 
-    user.communities.push({ communityId, role: "member" });
-    await user.save();
+    await User.findByIdAndUpdate(userId, {
+      $push: { communities: { communityId, role: "member" } }
+    });
 
     res.json({ message: "Joined community successfully", communityId });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-/* ============================
+/* ============================================
    CLAIM PERMISSION KEY
-============================ */
+============================================ */
 router.post("/permission/claim", auth, async (req, res) => {
   try {
     const { communityId, key } = req.body;
@@ -99,7 +98,6 @@ router.post("/permission/claim", auth, async (req, res) => {
 
     let matchedRole = null;
 
-    // Match against stored permission keys
     for (const [role, storedKey] of Object.entries(community.permissionKeys)) {
       if (storedKey === key) matchedRole = role;
     }
@@ -108,11 +106,9 @@ router.post("/permission/claim", auth, async (req, res) => {
       return res.status(400).json({ message: "Invalid permission key" });
 
     const member = community.members.find(m => m.userId.toString() === userId);
-
     if (!member)
-      return res.status(400).json({ message: "You are not part of this community" });
+      return res.status(400).json({ message: "You are not in this community" });
 
-    // Grant permission
     if (!member.permissions.includes(matchedRole)) {
       member.permissions.push(matchedRole);
       await community.save();
@@ -125,34 +121,110 @@ router.post("/permission/claim", auth, async (req, res) => {
   }
 });
 
-/* ============================
-   OWNER-ONLY: VIEW PERMISSION KEYS
-============================ */
-router.get("/:communityId/keys", auth, requireOwner, async (req, res) => {
-  const community = req.community;
-  res.json(community.permissionKeys);
+/* ============================================
+   GET RANKS
+============================================ */
+router.get("/:communityId/ranks", auth, async (req, res) => {
+  try {
+    const community = await Community.findById(req.params.communityId);
+    if (!community) return res.status(404).json({ message: "Community not found" });
+
+    res.json(community.ranks || []);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-/* ============================
-   GET USER COMMUNITIES
-============================ */
-router.get("/my", auth, async (req, res) => {
+/* ============================================
+   CREATE RANK
+============================================ */
+router.post("/:communityId/ranks/create", auth, requireOwner, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId);
+    const { name } = req.body;
+    const community = req.community;
 
-    const ids = user.communities.map(c => c.communityId);
-    const communities = await Community.find({ _id: { $in: ids } });
+    community.ranks.push({ name });
+    await community.save();
 
-    res.json(communities);
+    res.json(community.ranks);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ============================================
+   DELETE RANK
+============================================ */
+router.delete("/:communityId/ranks/delete/:rankId", auth, requireOwner, async (req, res) => {
+  try {
+    const community = await Community.findById(req.params.communityId);
+
+    community.ranks = community.ranks.filter(r => r._id.toString() !== req.params.rankId);
+    await community.save();
+
+    res.json({ message: "Rank deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ============================================
+   GET MEMBERS
+============================================ */
+router.get("/:communityId/members", auth, async (req, res) => {
+  try {
+    const community = await Community.findById(req.params.communityId).populate("members.userId");
+    if (!community) return res.status(404).json({ message: "Community not found" });
+
+    const members = community.members.map(m => ({
+      _id: m._id,
+      userId: m.userId._id,
+      email: m.userId.email,
+      role: m.role,
+      permissions: m.permissions
+    }));
+
+    res.json(members);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ============================================
+   UPDATE COMMUNITY
+============================================ */
+router.post("/update/:id", auth, requireOwner, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+
+    const updated = await Community.findByIdAndUpdate(
+      req.params.id,
+      { name, description },
+      { new: true }
+    );
+
+    res.json(updated);
 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-/* ============================
-   COMMUNITY DETAILS
-============================ */
+/* ============================================
+   DELETE COMMUNITY
+============================================ */
+router.delete("/delete/:id", auth, requireOwner, async (req, res) => {
+  try {
+    await Community.findByIdAndDelete(req.params.id);
+    res.json({ message: "Community deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ============================================
+   GET COMMUNITY (DETAILS)
+============================================ */
 router.get("/:id", auth, async (req, res) => {
   try {
     const community = await Community.findById(req.params.id);
