@@ -1,8 +1,29 @@
 import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
+import cors from "cors";
 
-// Health endpoints
+// ========================
+// 🔧 REQUIRED CORS CONFIG
+// ========================
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// Fix OPTIONS preflight globally (Render requires this)
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  return res.sendStatus(200);
+});
+
+// Render health check
 app.get("/", (req, res) => {
   res.json({
     status: "OK",
@@ -15,59 +36,40 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK", uptime: process.uptime() });
 });
 
-const PORT = process.env.PORT || 3000;
-
 // Create HTTP server
+const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
-// Create Socket.io server
+// SOCKET.IO SERVER
 const io = new Server(server, {
   cors: {
-    origin: "*"
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 
-// Attach io to req BEFORE routes run
+// Attach io BEFORE routes
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// =============================
-// SOCKET HANDLERS
-// =============================
+// SOCKET.IO EVENTS
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
-  // UNIT STATUS
-  socket.on("unit:status", (data) => {
-    io.emit("unit:status", data);
-  });
+  socket.on("unit:status", (d) => io.emit("unit:status", d));
+  socket.on("unit:location", (d) => io.emit("unit:location", d));
+  socket.on("unit:forceOffline", (d) => io.emit("unit:forceOffline", d));
+  socket.on("unit:panic", (d) => io.emit("unit:panic", d));
+  socket.on("call:update", (d) => io.emit("call:update", d));
 
-  // UNIT LOCATION
-  socket.on("unit:location", (data) => {
-    io.emit("unit:location", data);
-  });
-
-  // FORCE 10-7 / forced logout
-  socket.on("unit:forceOffline", (data) => {
-    io.emit("unit:forceOffline", data);
-  });
-
-  // PANIC BUTTON
-  socket.on("unit:panic", (data) => {
-    io.emit("unit:panic", data);
-  });
-
-  // CALL UPDATES
-  socket.on("call:update", (data) => {
-    io.emit("call:update", data);
-  });
+  socket.on("disconnect", () =>
+    console.log("🔴 Socket disconnected:", socket.id)
+  );
 });
 
-// =============================
 // START SERVER
-// =============================
 server.listen(PORT, () => {
   console.log(`🚀 OpsLink API running on port ${PORT}`);
 });
