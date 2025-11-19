@@ -26,15 +26,8 @@ const io = new Server(server, {
 
 io.on("connection", (socket) => {
   console.log("🟢 Socket Connected:", socket.id);
-
-  socket.on("unit:update", (data) => {
-    io.emit("unit:update", data);
-  });
-
-  socket.on("call:update", (data) => {
-    io.emit("call:update", data);
-  });
 });
 
-server.listen(PORT, () => console.log(`🚀 OpsLink API running on port ${PORT}`));
-
+server.listen(PORT, () =>
+  console.log(`🚀 OpsLink API running on port ${PORT}`)
+);
