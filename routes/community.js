@@ -65,16 +65,14 @@ router.get("/my", auth, async (req, res) => {
     const ids = user.communities.map(c => c.communityId.toString());
     const existing = await Community.find({ _id: { $in: ids } });
 
-    // Build cleaned list (communities that still exist)
     const existingIds = existing.map(c => c._id.toString());
 
-    const cleanedCommunities = user.communities.filter(c =>
+    const cleaned = user.communities.filter(c =>
       existingIds.includes(c.communityId.toString())
     );
 
-    // If cleanup needed, save user
-    if (cleanedCommunities.length !== user.communities.length) {
-      user.communities = cleanedCommunities;
+    if (cleaned.length !== user.communities.length) {
+      user.communities = cleaned;
       await user.save();
     }
 
@@ -84,6 +82,7 @@ router.get("/my", auth, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 /* ============================================
    JOIN COMMUNITY
@@ -282,3 +281,4 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 export default router;
+
