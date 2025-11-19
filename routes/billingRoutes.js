@@ -54,4 +54,35 @@ router.post("/create-subscription", auth, async (req, res) => {
   }
 });
 
+
+/* ============================================
+   CANCEL SUBSCRIPTION (Stops Auto-Renew)
+============================================= */
+router.post("/cancel", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+
+    if (!user.subscriptionId)
+      return res.status(400).json({ message: "No active subscription." });
+
+    // Set Stripe subscription to cancel at end of period
+    const canceled = await stripe.subscriptions.update(
+      user.subscriptionId,
+      { cancel_at_period_end: true }
+    );
+
+    user.planRenews = canceled.current_period_end * 1000;
+    await user.save();
+
+    res.json({
+      message: "Subscription will cancel at the end of the current billing period.",
+      renews: new Date(user.planRenews)
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
 export default router;
