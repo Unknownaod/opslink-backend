@@ -24,10 +24,27 @@ const io = new Server(server, {
   }
 });
 
+// ====== SOCKET LOGIC (ONLY ONCE!) ======
 io.on("connection", (socket) => {
-  console.log("🟢 Socket Connected:", socket.id);
+  console.log("🟢 Socket connected:", socket.id);
+
+  // UNIT STATUS UPDATE
+  socket.on("unit:status", (data) => {
+    io.emit("unit:status", data);
+  });
+
+  // CALL UPDATE
+  socket.on("call:update", (data) => {
+    io.emit("call:update", data);
+  });
+
+  // PANIC BUTTON
+  socket.on("panic:button", (data) => {
+    io.emit("panic:button", data);
+  });
 });
 
-server.listen(PORT, () =>
-  console.log(`🚀 OpsLink API running on port ${PORT}`)
-);
+// ====== START SERVER ======
+server.listen(PORT, () => {
+  console.log(`🚀 OpsLink API running on port ${PORT}`);
+});
