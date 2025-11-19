@@ -47,6 +47,23 @@ router.post("/create", auth, async (req, res) => {
     });
 
     res.status(201).json(community);
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ============================================
+   GET USER COMMUNITIES (**VERY IMPORTANT**)
+============================================ */
+router.get("/my", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+
+    const ids = user.communities.map(c => c.communityId);
+    const communities = await Community.find({ _id: { $in: ids } });
+
+    res.json(communities);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -67,12 +84,7 @@ router.post("/join", auth, async (req, res) => {
       return res.status(400).json({ message: "Already in this community" });
     }
 
-    community.members.push({
-      userId,
-      role: "member",
-      permissions: []
-    });
-
+    community.members.push({ userId, role: "member", permissions: [] });
     await community.save();
 
     await User.findByIdAndUpdate(userId, {
@@ -80,6 +92,7 @@ router.post("/join", auth, async (req, res) => {
     });
 
     res.json({ message: "Joined community successfully", communityId });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -122,8 +135,10 @@ router.post("/permission/claim", auth, async (req, res) => {
 });
 
 /* ============================================
-   GET RANKS
+   DEPARTMENTS / RANKS / MEMBERS FIRST!
 ============================================ */
+
+// GET RANKS
 router.get("/:communityId/ranks", auth, async (req, res) => {
   try {
     const community = await Community.findById(req.params.communityId);
@@ -135,9 +150,7 @@ router.get("/:communityId/ranks", auth, async (req, res) => {
   }
 });
 
-/* ============================================
-   CREATE RANK
-============================================ */
+// CREATE RANK
 router.post("/:communityId/ranks/create", auth, requireOwner, async (req, res) => {
   try {
     const { name } = req.body;
@@ -152,9 +165,7 @@ router.post("/:communityId/ranks/create", auth, requireOwner, async (req, res) =
   }
 });
 
-/* ============================================
-   DELETE RANK
-============================================ */
+// DELETE RANK
 router.delete("/:communityId/ranks/delete/:rankId", auth, requireOwner, async (req, res) => {
   try {
     const community = await Community.findById(req.params.communityId);
@@ -163,17 +174,18 @@ router.delete("/:communityId/ranks/delete/:rankId", auth, requireOwner, async (r
     await community.save();
 
     res.json({ message: "Rank deleted" });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-/* ============================================
-   GET MEMBERS
-============================================ */
+// GET MEMBERS
 router.get("/:communityId/members", auth, async (req, res) => {
   try {
-    const community = await Community.findById(req.params.communityId).populate("members.userId");
+    const community = await Community.findById(req.params.communityId)
+      .populate("members.userId");
+
     if (!community) return res.status(404).json({ message: "Community not found" });
 
     const members = community.members.map(m => ({
@@ -185,13 +197,14 @@ router.get("/:communityId/members", auth, async (req, res) => {
     }));
 
     res.json(members);
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 /* ============================================
-   UPDATE COMMUNITY
+   UPDATE / DELETE COMMUNITY
 ============================================ */
 router.post("/update/:id", auth, requireOwner, async (req, res) => {
   try {
@@ -210,9 +223,6 @@ router.post("/update/:id", auth, requireOwner, async (req, res) => {
   }
 });
 
-/* ============================================
-   DELETE COMMUNITY
-============================================ */
 router.delete("/delete/:id", auth, requireOwner, async (req, res) => {
   try {
     await Community.findByIdAndDelete(req.params.id);
@@ -223,7 +233,7 @@ router.delete("/delete/:id", auth, requireOwner, async (req, res) => {
 });
 
 /* ============================================
-   GET COMMUNITY (DETAILS)
+   LAST → GET COMMUNITY DETAILS
 ============================================ */
 router.get("/:id", auth, async (req, res) => {
   try {
