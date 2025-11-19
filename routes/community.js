@@ -54,16 +54,32 @@ router.post("/create", auth, async (req, res) => {
 });
 
 /* ============================================
-   GET USER COMMUNITIES (**VERY IMPORTANT**)
+   GET USER COMMUNITIES (FIXED)
 ============================================ */
 router.get("/my", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
 
-    const ids = user.communities.map(c => c.communityId);
-    const communities = await Community.find({ _id: { $in: ids } });
+    if (!user || !user.communities) return res.json([]);
 
-    res.json(communities);
+    const ids = user.communities.map(c => c.communityId.toString());
+    const existing = await Community.find({ _id: { $in: ids } });
+
+    // Build cleaned list (communities that still exist)
+    const existingIds = existing.map(c => c._id.toString());
+
+    const cleanedCommunities = user.communities.filter(c =>
+      existingIds.includes(c.communityId.toString())
+    );
+
+    // If cleanup needed, save user
+    if (cleanedCommunities.length !== user.communities.length) {
+      user.communities = cleanedCommunities;
+      await user.save();
+    }
+
+    res.json(existing);
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -135,7 +151,7 @@ router.post("/permission/claim", auth, async (req, res) => {
 });
 
 /* ============================================
-   DEPARTMENTS / RANKS / MEMBERS FIRST!
+   RANK SYSTEM
 ============================================ */
 
 // GET RANKS
@@ -180,7 +196,9 @@ router.delete("/:communityId/ranks/delete/:rankId", auth, requireOwner, async (r
   }
 });
 
-// GET MEMBERS
+/* ============================================
+   GET MEMBERS
+============================================ */
 router.get("/:communityId/members", auth, async (req, res) => {
   try {
     const community = await Community.findById(req.params.communityId)
@@ -204,7 +222,7 @@ router.get("/:communityId/members", auth, async (req, res) => {
 });
 
 /* ============================================
-   UPDATE / DELETE COMMUNITY
+   UPDATE COMMUNITY
 ============================================ */
 router.post("/update/:id", auth, requireOwner, async (req, res) => {
   try {
@@ -223,19 +241,20 @@ router.post("/update/:id", auth, requireOwner, async (req, res) => {
   }
 });
 
+/* ============================================
+   DELETE COMMUNITY
+============================================ */
 router.delete("/delete/:id", auth, requireOwner, async (req, res) => {
   try {
     const communityId = req.params.id;
 
-    // 1 — Delete the community itself
     await Community.findByIdAndDelete(communityId);
 
-    // 2 — Remove community reference from ALL users
     await User.updateMany(
       { "communities.communityId": communityId },
       {
         $pull: {
-          communities: { communityId: communityId }
+          communities: { communityId }
         }
       }
     );
@@ -247,9 +266,8 @@ router.delete("/delete/:id", auth, requireOwner, async (req, res) => {
   }
 });
 
-
 /* ============================================
-   LAST → GET COMMUNITY DETAILS
+   GET COMMUNITY DETAILS
 ============================================ */
 router.get("/:id", auth, async (req, res) => {
   try {
@@ -264,4 +282,3 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 export default router;
-
