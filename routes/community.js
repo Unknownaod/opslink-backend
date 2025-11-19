@@ -225,12 +225,28 @@ router.post("/update/:id", auth, requireOwner, async (req, res) => {
 
 router.delete("/delete/:id", auth, requireOwner, async (req, res) => {
   try {
-    await Community.findByIdAndDelete(req.params.id);
-    res.json({ message: "Community deleted" });
+    const communityId = req.params.id;
+
+    // 1 — Delete the community itself
+    await Community.findByIdAndDelete(communityId);
+
+    // 2 — Remove community reference from ALL users
+    await User.updateMany(
+      { "communities.communityId": communityId },
+      {
+        $pull: {
+          communities: { communityId: communityId }
+        }
+      }
+    );
+
+    res.json({ message: "Community deleted successfully" });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 /* ============================================
    LAST → GET COMMUNITY DETAILS
@@ -248,3 +264,4 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 export default router;
+
