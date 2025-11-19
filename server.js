@@ -2,6 +2,18 @@ import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
 
+app.get("/", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "OpsLink API is running successfully.",
+    uptime: process.uptime()
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", uptime: process.uptime() });
+});
+
 const PORT = process.env.PORT || 3000;
 
 const server = http.createServer(app);
