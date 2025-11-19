@@ -33,8 +33,9 @@ app.use("/units", unitRoutes);
 app.use("/civilians", civilianRoutes);
 app.use("/calls", callRoutes);
 app.use("/search", searchRoutes);
-app.use("/billling", billingRoutes);
+app.use("/billing", billingRoutes);
 
 export default app;
+
 
 
