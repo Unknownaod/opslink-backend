@@ -9,11 +9,12 @@ import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-import app from "./app.js"; // Make sure app.js does NOT have express.json() before webhook!
+import app from "./app.js";  
+// IMPORTANT: app.js MUST NOT have express.json() before webhook!!
 
-// ========================
-// 🔧 REQUIRED CORS CONFIG
-// ========================
+// =======================================================
+// CORS
+// =======================================================
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -23,18 +24,14 @@ app.use(cors({
 app.options("*", (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   return res.sendStatus(200);
 });
 
 
 // =======================================================
-// 🚨 STRIPE WEBHOOK — MUST BE FIRST ROUTE (BEFORE JSON)
+// STRIPE WEBHOOK (MUST be BEFORE express.json())
 // =======================================================
-
 app.post(
   "/billing/webhook",
   express.raw({ type: "application/json" }),
@@ -53,7 +50,9 @@ app.post(
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // 🔥 Every successful payment
+    // ===========================
+    // 1. Payment succeeded
+    // ===========================
     if (event.type === "invoice.payment_succeeded") {
       const invoice = event.data.object;
       const customerId = invoice.customer;
@@ -69,19 +68,47 @@ app.post(
       );
     }
 
+    // ===========================
+    // 2. Subscription cancelled
+    // ===========================
+    if (event.type === "customer.subscription.deleted") {
+      const sub = event.data.object;
+
+      await User.findOneAndUpdate(
+        { subscriptionId: sub.id },
+        { subscription: "free", subscriptionId: null, cancelAtPeriodEnd: false }
+      );
+    }
+
+    // ===========================
+    // 3. Payment failed
+    // ===========================
+    if (event.type === "invoice.payment_failed") {
+      const invoice = event.data.object;
+
+      await User.findOneAndUpdate(
+        { stripeCustomerId: invoice.customer },
+        { subscription: "free", subscriptionId: null }
+      );
+    }
+
     return res.json({ received: true });
   }
 );
 
 
 // =======================================================
-// AFTER WEBHOOK: now parse JSON for the REST of the API
+// JSON parser — AFTER WEBHOOK
 // =======================================================
 app.use(express.json());
+
+// Billing API
 app.use("/billing", billingRoutes);
 
 
-// Render health check
+// =======================================================
+// Health routes
+// =======================================================
 app.get("/", (req, res) => {
   res.json({
     status: "OK",
@@ -95,16 +122,14 @@ app.get("/health", (req, res) => {
 });
 
 
-// Create HTTP server
+// =======================================================
+// HTTP + SOCKET.IO
+// =======================================================
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
-// SOCKET.IO SERVER
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 app.use((req, res, next) => {
