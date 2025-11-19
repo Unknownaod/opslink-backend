@@ -5,6 +5,9 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
+/* ===========================================
+   REGISTER
+=========================================== */
 router.post("/register", async (req, res) => {
   try {
     const { email, password, name } = req.body;
@@ -14,22 +17,39 @@ router.post("/register", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const user = await User.create({ email, passwordHash, name });
-    return res.status(201).json(user);
+    const user = await User.create({
+      email,
+      passwordHash,
+      name,
+      subscription: "free" // default plan
+    });
+
+    return res.status(201).json({
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+      subscription: "free"
+    });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+/* ===========================================
+   LOGIN (SECURE VERSION)
+=========================================== */
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid email or password" });
+    if (!user)
+      return res.status(400).json({ message: "Invalid email or password" });
 
     const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) return res.status(400).json({ message: "Invalid email or password" });
+    if (!valid)
+      return res.status(400).json({ message: "Invalid email or password" });
 
     const token = jwt.sign(
       { userId: user._id, email: user.email },
@@ -37,7 +57,17 @@ router.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    return res.json({ token, user });
+    // ⛔ DO NOT send passwordHash, stripe IDs, timestamps, anything sensitive
+    return res.json({
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        subscription: user.subscription || "free"
+      }
+    });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
