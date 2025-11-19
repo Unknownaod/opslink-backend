@@ -4,6 +4,11 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true },
   passwordHash: { type: String, required: true },
   name: { type: String },
+  subscription: { type: String, default: "free" },
+  stripeCustomerId: { type: String },
+  subscriptionId: { type: String },
+  planRenews: { type: Date }
+
 
   communities: {
     type: [
@@ -22,3 +27,4 @@ const UserSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 export default mongoose.model("User", UserSchema);
+
