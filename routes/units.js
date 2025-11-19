@@ -4,21 +4,23 @@ import Unit from "../models/Unit.js";
 
 const router = express.Router();
 
-// ===============================
-// CREATE UNIT
-// ===============================
+/* ============================================================
+   CREATE UNIT (First time going 10-8)
+   ============================================================ */
 router.post("/create", auth, async (req, res) => {
   try {
     const { communityId, callsign, name, departmentId, rank, type } = req.body;
 
-    // Prevent user from creating more than one unit in this community
+    // Prevent duplicate unit for same user in same community
     const exists = await Unit.findOne({
       communityId,
       userId: req.user.userId
     });
 
     if (exists) {
-      return res.status(400).json({ message: "You already have a unit in this community." });
+      return res.status(400).json({
+        message: "You already have a unit in this community."
+      });
     }
 
     const unit = await Unit.create({
@@ -28,7 +30,15 @@ router.post("/create", auth, async (req, res) => {
       name,
       departmentId,
       rank,
-      type
+      type,
+      status: "10-8"
+    });
+
+    // LIVE BROADCAST
+    req.io.emit("unit:status", {
+      unitId: unit._id,
+      callsign: unit.callsign,
+      status: "10-8"
     });
 
     return res.status(201).json(unit);
@@ -39,9 +49,9 @@ router.post("/create", auth, async (req, res) => {
 });
 
 
-// ===============================
-// GET USER'S UNIT
-// ===============================
+/* ============================================================
+   GET USER'S UNIT
+   ============================================================ */
 router.get("/:communityId/me", auth, async (req, res) => {
   try {
     const unit = await Unit.findOne({
@@ -56,9 +66,9 @@ router.get("/:communityId/me", auth, async (req, res) => {
 });
 
 
-// ===============================
-// GET ALL UNITS IN COMMUNITY
-// ===============================
+/* ============================================================
+   GET ALL UNITS IN COMMUNITY
+   ============================================================ */
 router.get("/:communityId", auth, async (req, res) => {
   try {
     const units = await Unit.find({ communityId: req.params.communityId });
@@ -69,9 +79,9 @@ router.get("/:communityId", auth, async (req, res) => {
 });
 
 
-// ===============================
-// UPDATE STATUS (10-8, 10-7, 10-6, 10-23, etc.)
-// ===============================
+/* ============================================================
+   UPDATE STATUS (10-8, 10-7, ENROUTE, BUSY, etc)
+   ============================================================ */
 router.post("/:unitId/status", auth, async (req, res) => {
   try {
     const { status } = req.body;
@@ -82,7 +92,6 @@ router.post("/:unitId/status", auth, async (req, res) => {
       { new: true }
     );
 
-    // Broadcast to all clients
     req.io.emit("unit:status", updated);
 
     return res.json(updated);
@@ -93,9 +102,9 @@ router.post("/:unitId/status", auth, async (req, res) => {
 });
 
 
-// ===============================
-// UPDATE LOCATION (MDT Tracking)
-// ===============================
+/* ============================================================
+   UPDATE LOCATION (GPS)
+   ============================================================ */
 router.post("/:unitId/location", auth, async (req, res) => {
   try {
     const { lat, lng } = req.body;
@@ -119,9 +128,9 @@ router.post("/:unitId/location", auth, async (req, res) => {
 });
 
 
-// ===============================
-// PANIC BUTTON
-// ===============================
+/* ============================================================
+   PANIC BUTTON
+   ============================================================ */
 router.post("/:unitId/panic", auth, async (req, res) => {
   try {
     const updated = await Unit.findByIdAndUpdate(
@@ -140,9 +149,9 @@ router.post("/:unitId/panic", auth, async (req, res) => {
 });
 
 
-// ===============================
-// SUPERVISOR FORCE 10-7 / FORCE LOGOUT
-// ===============================
+/* ============================================================
+   SUPERVISOR: FORCE UNIT OFFLINE
+   ============================================================ */
 router.post("/:unitId/forceOffline", auth, async (req, res) => {
   try {
     const updated = await Unit.findByIdAndUpdate(
@@ -161,17 +170,19 @@ router.post("/:unitId/forceOffline", auth, async (req, res) => {
 });
 
 
-// ===============================
-// DELETE UNIT (Admin / Owner Only)
-// ===============================
+/* ============================================================
+   DELETE UNIT (Admin / Owner)
+   ============================================================ */
 router.delete("/:unitId/delete", auth, async (req, res) => {
   try {
     await Unit.findByIdAndDelete(req.params.unitId);
+
     return res.json({ message: "Unit removed." });
 
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
+
 
 export default router;
