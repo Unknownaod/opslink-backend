@@ -4,37 +4,6 @@ import app from "./app.js";
 import cors from "cors";
 
 // ========================
-// 🧨 ONE-TIME FULL COMMUNITY WIPE
-// (Runs once, then REMOVE THIS BLOCK)
-// ========================
-import Community from "./models/Community.js";
-import User from "./models/User.js";
-
-async function wipeAllCommunities() {
-  try {
-    console.log("⚠️ ONE-TIME CLEANUP: Wiping ALL communities...");
-
-    // Delete all community documents
-    await Community.deleteMany({});
-
-    // Remove communities from all users
-    await User.updateMany({}, { $set: { communities: [] } });
-
-    console.log("✅ Cleanup complete: All communities removed.");
-  } catch (err) {
-    console.error("❌ Cleanup error:", err);
-  }
-}
-
-// RUN WIPE ONE TIME
-wipeAllCommunities();
-// ========================
-// END WIPE BLOCK
-// REMOVE AFTER USE
-// ========================
-
-
-// ========================
 // 🔧 REQUIRED CORS CONFIG
 // ========================
 app.use(cors({
@@ -104,3 +73,4 @@ io.on("connection", (socket) => {
 server.listen(PORT, () => {
   console.log(`🚀 OpsLink API running on port ${PORT}`);
 });
+
