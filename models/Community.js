@@ -1,43 +1,31 @@
-import Community from "../models/Community.js";
+import mongoose from "mongoose";
 
-export const requireMember = async (req, res, next) => {
-  next(); // everyone is at least a member
-};
+const CommunitySchema = new mongoose.Schema({
+  ownerId: { type: mongoose.Schema.Types.ObjectId, required: true },
 
-export const requireAdminOrOwner = async (req, res, next) => {
-  try {
-    const communityId = req.params.communityId || req.body.communityId;
-    const userId = req.user.userId;
+  name: { type: String, required: true },
+  description: { type: String },
 
-    const community = await Community.findById(communityId);
-    if (!community) return res.status(404).json({ message: "Community not found" });
+  settings: { type: Object, default: {} },
 
-    const member = community.members.find(m => m.userId.toString() === userId);
+  // SONORAN-STYLE PERMISSION KEYS
+  permissionKeys: {
+    leo: { type: String },
+    fire: { type: String },
+    dispatch: { type: String },
+    supervisor: { type: String },
+    admin: { type: String }
+  },
 
-    if (!member) return res.status(403).json({ message: "Not in this community" });
+  // Members + their permissions
+  members: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, required: true },
+      role: { type: String, default: "member" }, // owner | admin | member
+      permissions: { type: Array, default: [] }  // ["leo", "dispatch"]
+    }
+  ]
 
-    if (member.role !== "admin" && member.role !== "owner")
-      return res.status(403).json({ message: "Insufficient permissions" });
+}, { timestamps: true });
 
-    next();
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-export const requireOwner = async (req, res, next) => {
-  try {
-    const communityId = req.params.communityId || req.body.communityId;
-    const userId = req.user.userId;
-
-    const community = await Community.findById(communityId);
-    if (!community) return res.status(404).json({ message: "Community not found" });
-
-    if (community.ownerId.toString() !== userId)
-      return res.status(403).json({ message: "Owner access only" });
-
-    next();
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
+export default mongoose.model("Community", CommunitySchema);
