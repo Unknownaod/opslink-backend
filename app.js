@@ -17,13 +17,14 @@ connectDB();
 
 const app = express();
 
-// CORS (safe anywhere)
+// CORS
 app.use(cors());
 
-// ❌ DO NOT PUT express.json() HERE
-// It would break Stripe webhook
+// ✅ JSON PARSER (MUST BE HERE)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Base API routes (JSON will be applied in server.js)
+// ✅ ROUTES
 app.use("/auth", authRoutes);
 app.use("/community", communityRoutes);
 app.use("/departments", departmentRoutes);
