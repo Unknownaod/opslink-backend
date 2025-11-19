@@ -11,6 +11,7 @@ import unitRoutes from "./routes/units.js";
 import civilianRoutes from "./routes/civilians.js";
 import callRoutes from "./routes/calls.js";
 import searchRoutes from "./routes/search.js";
+import billingRoutes from "./routes/billingRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -34,3 +35,4 @@ app.use("/calls", callRoutes);
 app.use("/search", searchRoutes);
 
 export default app;
+
