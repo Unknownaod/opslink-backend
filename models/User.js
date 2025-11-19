@@ -4,12 +4,15 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true },
   passwordHash: { type: String, required: true },
   name: { type: String },
-  subscription: { type: String, default: "free" },
+
+  // BILLING FIELDS
+  subscription: { type: String, default: "free" },       // free | premier
   stripeCustomerId: { type: String },
   subscriptionId: { type: String },
-  planRenews: { type: Date }
+  planRenews: { type: Date },
+  cancelAtPeriodEnd: { type: Boolean, default: false },
 
-
+  // COMMUNITIES
   communities: {
     type: [
       {
@@ -21,10 +24,9 @@ const UserSchema = new mongoose.Schema({
         role: { type: String, default: "member" }
       }
     ],
-    default: []     // 🚀 FIXES your 500 error forever
-  },
+    default: []
+  }
 
 }, { timestamps: true });
 
 export default mongoose.model("User", UserSchema);
-
