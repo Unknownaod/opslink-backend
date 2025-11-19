@@ -60,15 +60,22 @@ router.get("/my", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
 
-    if (!user || !user.communities) return res.json([]);
+    if (!user || !user.communities) {
+      return res.json([]);
+    }
 
+    // Extract community IDs
     const ids = user.communities.map(c => c.communityId.toString());
-    const existing = await Community.find({ _id: { $in: ids } });
 
-    const existingIds = existing.map(c => c._id.toString());
+    // Fetch communities that still exist in the database
+    const communities = await Community.find({ _id: { $in: ids } });
 
+    // Build array of valid IDs (existing in DB)
+    const validIds = communities.map(c => c._id.toString());
+
+    // Clean ghost entries from user.communities
     const cleaned = user.communities.filter(c =>
-      existingIds.includes(c.communityId.toString())
+      validIds.includes(c.communityId.toString())
     );
 
     if (cleaned.length !== user.communities.length) {
@@ -76,12 +83,15 @@ router.get("/my", auth, async (req, res) => {
       await user.save();
     }
 
-    res.json(existing);
+    // Return existing communities only
+    return res.json(communities);
 
   } catch (err) {
+    console.error("ERROR in /community/my:", err);
     res.status(500).json({ message: err.message });
   }
 });
+
 
 
 /* ============================================
@@ -281,4 +291,5 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 export default router;
+
 
