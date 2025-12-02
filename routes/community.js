@@ -154,13 +154,15 @@ router.post("/permission/claim", auth, async (req, res) => {
 });
 
 /* ============================================
-   RANK SYSTEM
+   RANK SYSTEM (UPDATED FOR DEPARTMENT SUPPORT)
 ============================================ */
 
-// GET RANKS
+// GET RANKS (optionally populated department name)
 router.get("/:communityId/ranks", auth, async (req, res) => {
   try {
-    const community = await Community.findById(req.params.communityId);
+    const community = await Community.findById(req.params.communityId)
+      .populate("ranks.departmentId", "name type"); // 👈 add populate
+
     if (!community)
       return res.status(404).json({ message: "Community not found" });
 
@@ -170,46 +172,51 @@ router.get("/:communityId/ranks", auth, async (req, res) => {
   }
 });
 
-// CREATE RANK
-router.post(
-  "/:communityId/ranks/create",
-  auth,
-  requireOwner,
-  async (req, res) => {
-    try {
-      const { name } = req.body;
-      const community = req.community;
+// CREATE RANK WITH OPTIONAL DEPARTMENT
+router.post("/:communityId/ranks/create", auth, requireOwner, async (req, res) => {
+  try {
+    const { name, departmentId } = req.body;
+    const community = req.community;
 
-      community.ranks.push({ name });
-      await community.save();
-
-      res.json(community.ranks);
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+    if (!name || name.trim().length < 1) {
+      return res.status(400).json({ message: "Rank name required" });
     }
+
+    // If departmentId was sent but isn't a valid ObjectId → reject
+    if (departmentId && !mongoose.Types.ObjectId.isValid(departmentId)) {
+      return res.status(400).json({ message: "Invalid departmentId" });
+    }
+
+    community.ranks.push({
+      name: name.trim(),
+      departmentId: departmentId || null // store null when global
+    });
+
+    await community.save();
+    res.json(community.ranks);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-);
+});
 
 // DELETE RANK
-router.delete(
-  "/:communityId/ranks/delete/:rankId",
-  auth,
-  requireOwner,
-  async (req, res) => {
-    try {
-      const community = await Community.findById(req.params.communityId);
+router.delete("/:communityId/ranks/delete/:rankId", auth, requireOwner, async (req, res) => {
+  try {
+    const community = await Community.findById(req.params.communityId);
 
-      community.ranks = community.ranks.filter(
-        (r) => r._id.toString() !== req.params.rankId
-      );
-      await community.save();
+    if (!community)
+      return res.status(404).json({ message: "Community not found" });
 
-      res.json({ message: "Rank deleted" });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
-    }
+    community.ranks = community.ranks.filter(
+      (r) => r._id.toString() !== req.params.rankId
+    );
+
+    await community.save();
+    res.json({ message: "Rank deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-);
+});
 
 /* ============================================
    GET MEMBERS
@@ -296,3 +303,4 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 export default router;
+
