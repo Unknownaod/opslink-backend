@@ -12,6 +12,7 @@ import civilianRoutes from "./routes/civilians.js";
 import callRoutes from "./routes/calls.js";
 import searchRoutes from "./routes/search.js";
 import billingRoutes from "./routes/billingRoutes.js";
+import mdtRoutes from "./routes/mdt.js";
 
 dotenv.config();
 connectDB();
@@ -34,8 +35,10 @@ app.use("/civilians", civilianRoutes);
 app.use("/calls", callRoutes);
 app.use("/search", searchRoutes);
 app.use("/billing", billingRoutes);
+app.use("/mdt", mdtRoutes);
 
 export default app;
+
 
 
 
