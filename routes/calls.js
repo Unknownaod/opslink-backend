@@ -1,120 +1,77 @@
 import express from "express";
+import { auth } from "../middleware/auth.js";
 import Call from "../models/Call.js";
-import Unit from "../models/Unit.js";
 
 const router = express.Router();
 
-// AUTO INCREMENT CALL NUMBER FUNCTION
-async function getNextCallNumber(communityId) {
-  const lastCall = await Call.findOne({ communityId }).sort({ callNumber: -1 });
-  return lastCall ? lastCall.callNumber + 1 : 1;
-}
-
-// CREATE CALL
-router.post("/create", async (req, res) => {
+/* ============================================================
+   CREATE CALL (Dispatch)
+   POST /calls/create
+============================================================ */
+router.post("/create", auth, async (req, res) => {
   try {
-    const { communityId, type, priority, location, description } = req.body;
-
-    const callNumber = await getNextCallNumber(communityId);
-
     const call = await Call.create({
-      communityId,
-      callNumber,
-      type,
-      priority,
-      location,
-      description
+      communityId: req.body.communityId,
+      callNumber: await Call.countDocuments({ communityId: req.body.communityId }) + 1,
+      type: req.body.type,
+      location: req.body.location,
+      description: req.body.description,
+      units: []
     });
 
-    return res.status(201).json(call);
+    req.io?.emit("call:new", call);
+    res.status(201).json(call);
 
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// GET ACTIVE CALLS
-router.get("/:communityId", async (req, res) => {
+/* ============================================================
+   GET ALL CALLS IN COMMUNITY
+   GET /calls/:communityId
+============================================================ */
+router.get("/:communityId", auth, async (req, res) => {
   try {
-    const calls = await Call.find({ 
-      communityId: req.params.communityId,
-      status: "Active"
-    }).sort({ callNumber: 1 });
-
-    return res.json(calls);
-
+    const calls = await Call.find({ communityId: req.params.communityId });
+    res.json(calls);
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// ATTACH UNIT
-router.put("/attach/:callId", async (req, res) => {
+/* ============================================================
+   ATTACH UNIT TO CALL
+   PUT /calls/attach/:callId
+============================================================ */
+router.put("/attach/:callId", auth, async (req, res) => {
   try {
     const { unitId, callsign } = req.body;
 
-    const call = await Call.findById(req.params.callId);
-    call.attachedUnits.push({ unitId, callsign });
-    await call.save();
+    const call = await Call.findByIdAndUpdate(
+      req.params.callId,
+      { $addToSet: { units: { unitId, callsign } } },
+      { new: true }
+    );
 
-    return res.json(call);
-
+    req.io?.emit("call:update", call);
+    res.json(call);
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// DETACH UNIT
-router.put("/detach/:callId", async (req, res) => {
-  try {
-    const { unitId } = req.body;
-
-    const call = await Call.findById(req.params.callId);
-    call.attachedUnits = call.attachedUnits.filter(u => u.unitId != unitId);
-    await call.save();
-
-    return res.json(call);
-
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
-});
-
-// ADD NOTE
-router.post("/addNote/:callId", async (req, res) => {
-  try {
-    const { userId, text } = req.body;
-
-    const call = await Call.findById(req.params.callId);
-    call.notes.push({ userId, text });
-    await call.save();
-
-    return res.json(call);
-
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
-});
-
-// UPDATE CALL
-router.put("/update/:callId", async (req, res) => {
-  try {
-    const call = await Call.findByIdAndUpdate(req.params.callId, req.body, { new: true });
-    return res.json(call);
-
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
-});
-
-// DELETE CALL
-router.delete("/delete/:callId", async (req, res) => {
+/* ============================================================
+   CLEAR CALL
+   DELETE /calls/clear/:callId
+============================================================ */
+router.delete("/clear/:callId", auth, async (req, res) => {
   try {
     await Call.findByIdAndDelete(req.params.callId);
-    return res.json({ message: "Call deleted" });
-
+    req.io?.emit("call:clear", req.params.callId);
+    res.json({ message: "Call cleared" });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
