@@ -1,49 +1,60 @@
 import mongoose from "mongoose";
 
-const UnitSchema = new mongoose.Schema({
+const MDTUnitSessionSchema = new mongoose.Schema(
+  {
+    communityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "Community",
+      index: true
+    },
 
-  communityId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Community" },
-  userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "User" },
-  departmentId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Department" },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+      unique: true // ONE SESSION PER USER
+    },
 
-  // Unit Identity
-  callsign: { type: String, required: true },
-  name: { type: String },             // Officer/Firefighter real name
-  rank: { type: String },             // Patrol Officer, Corporal, Engineer, etc.
+    // Identity
+    name: { type: String, required: true },        // "J. Smith"
+    callsign: { type: String, required: true },    // "2B-21"
+    department: { type: String, required: true },  // "LEO", "Fire", etc.
+    rank: { type: String, default: "Officer" },
+    type: { type: String, default: "patrol" },     // free text
 
-  // Unit Type
-  type: {
-    type: String,
-    enum: ["leo", "fire", "ems", "dispatch"],
-    default: "leo"
+    // Operational Status
+    status: {
+      type: String,
+      enum: [
+        "10-8",
+        "10-7",
+        "10-6",
+        "10-23",
+        "Enroute",
+        "Clearing",
+        "TrafficStop",
+        "LunchBreak",
+        "panic"
+      ],
+      default: "10-7"
+    },
+
+    // Live map tracking
+    location: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+      updatedAt: { type: Date }
+    },
+
+    // Supervisor & Audit
+    lastActive: { type: Date, default: Date.now },
+
+    // Optional custom storage
+    metadata: { type: Object, default: {} }
   },
 
-  // Unit Status
-  status: {
-    type: String,
-    enum: [
-      "10-8",  // In Service
-      "10-7",  // Out of Service
-      "10-6",  // Busy
-      "10-23", // On Scene
-      "panic", // Panic Button
-      "signal100" // Optional
-    ],
-    default: "10-7"
-  },
+  { timestamps: true }
+);
 
-  // Live location (optional for map)
-  location: {
-    lat: Number,
-    lng: Number
-  },
-
-  // Metadata for custom systems (notes, flags, etc.)
-  metadata: { type: Object, default: {} },
-
-  // Supervisor tracking
-  lastActive: { type: Date, default: Date.now }
-
-}, { timestamps: true });
-
-export default mongoose.model("Unit", UnitSchema);
+export default mongoose.model("MDTUnitSession", MDTUnitSessionSchema);
