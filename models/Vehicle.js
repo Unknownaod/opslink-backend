@@ -1,25 +1,37 @@
 import mongoose from "mongoose";
 
-const VehicleSchema = new mongoose.Schema({
-  communityId: { type: mongoose.Schema.Types.ObjectId, required: true },
+const VehicleSchema = new mongoose.Schema(
+  {
+    communityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true
+    },
 
-  // Civilian owner (optional if officer-created)
-  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "Civilian", required: false },
+    // Optional owner link
+    ownerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Civilian",
+      required: false
+    },
 
-  // Basic info
-  plate: { type: String, required: true, unique: false },
-  make: { type: String, default: "" },
-  model: { type: String, default: "" },
-  color: { type: String, default: "" },
-  year: { type: String, default: "" },
+    plate: { type: String, required: true, index: true },
+    make: { type: String, default: "" },
+    model: { type: String, default: "" },
+    color: { type: String, default: "" },
+    year: { type: String, default: "" },
 
-  // Status flags
-  stolen: { type: Boolean, default: false },
-  bolo: { type: Boolean, default: false },
+    stolen: { type: Boolean, default: false },
+    bolo: { type: Boolean, default: false },
 
-  // Multiple flags (optional future)
-  flags: { type: [String], default: [] }
+    // Flexible future flags (NCIC, Felony warrant vehicle, etc.)
+    flags: { type: [String], default: [] }
+  },
 
-}, { timestamps: true });
+  { timestamps: true }
+);
+
+// Ensure no duplicate plates in a community
+VehicleSchema.index({ communityId: 1, plate: 1 }, { unique: true });
 
 export default mongoose.model("Vehicle", VehicleSchema);
