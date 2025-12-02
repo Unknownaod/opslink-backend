@@ -7,23 +7,23 @@ const router = express.Router();
 
 /* ============================================================
    PERSON SEARCH
-   POST /search/person
-   Body: { query, communityId }
-   ============================================================ */
-router.post("/person", auth, async (req, res) => {
+   GET /search/person/:communityId?q=John
+============================================================ */
+router.get("/person/:communityId", auth, async (req, res) => {
   try {
-    const { query, communityId } = req.body;
+    const q = req.query.q?.trim() || "";
+    if (!q) return res.json([]);
 
-    if (!query || !communityId)
-      return res.status(400).json({ message: "Missing query or communityId" });
-
-    // Search civilians by name (first, last, or full)
     const results = await Civilian.find({
-      communityId,
-      name: { $regex: query, $options: "i" }
+      communityId: req.params.communityId,
+      name: { $regex: q, $options: "i" }
     });
 
-    return res.json(results);
+    return res.json({
+      type: "person",
+      count: results.length,
+      results
+    });
 
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -32,41 +32,53 @@ router.post("/person", auth, async (req, res) => {
 
 /* ============================================================
    VEHICLE SEARCH
-   POST /search/vehicle
-   Body: { plate, communityId }
-   ============================================================ */
-router.post("/vehicle", auth, async (req, res) => {
+   GET /search/vehicle/:communityId?plate=ABC
+============================================================ */
+router.get("/vehicle/:communityId", auth, async (req, res) => {
   try {
-    const { plate, communityId } = req.body;
+    const plate = req.query.plate?.trim() || "";
+    if (!plate) return res.json([]);
 
-    if (!plate || !communityId)
-      return res.status(400).json({ message: "Missing plate or communityId" });
-
-    // Search vehicles by partial plate
-    const results = await Vehicle.find({
-      communityId,
+    const vehicles = await Vehicle.find({
+      communityId: req.params.communityId,
       plate: { $regex: plate, $options: "i" }
     }).populate("ownerId");
 
-    // Format response nicely
-    const formatted = results.map(v => ({
+    const formatted = vehicles.map(v => ({
+      id: v._id,
       plate: v.plate,
       make: v.make,
       model: v.model,
-      color: v.color,
       year: v.year,
-      stolen: v.stolen,
+      color: v.color,
       bolo: v.bolo,
-      owner: v.ownerId ? {
+      stolen: v.stolen,
+      flags: v.flags || [],
+
+      owner: v.ownerId && {
         id: v.ownerId._id,
         name: v.ownerId.name,
         dob: v.ownerId.dob,
         address: v.ownerId.address,
-        license: v.ownerId.license
-      } : null
+
+        // Updated licenses object
+        licenses: {
+          driver: v.ownerId.licenses?.driver || "none",
+          firearm: v.ownerId.licenses?.firearm || "none",
+          boating: v.ownerId.licenses?.boating || "none",
+          pilot: v.ownerId.licenses?.pilot || "none"
+        },
+
+        history: v.ownerId.history || [],
+        flags: v.ownerId.flags || []
+      }
     }));
 
-    return res.json(formatted);
+    return res.json({
+      type: "vehicle",
+      count: formatted.length,
+      results: formatted
+    });
 
   } catch (err) {
     return res.status(500).json({ message: err.message });
