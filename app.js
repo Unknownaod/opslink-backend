@@ -38,8 +38,11 @@ app.use("/calls", callRoutes);
 app.use("/search", searchRoutes);
 app.use("/billing", billingRoutes);
 app.use("/mdt", mdtRoutes);
+app.use("/bolos", boloRoutes);
+app.use("/traffic", trafficRoutes);
 
 export default app;
+
 
 
 
