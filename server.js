@@ -4,12 +4,6 @@ import { Server } from "socket.io";
 import cors from "cors";
 
 import billingRoutes from "./routes/billingRoutes.js";
-import mdtRoutes from "./routes/mdt.js";
-import unitRoutes from "./routes/units.js";
-import callRoutes from "./routes/calls.js";
-import boloRoutes from "./routes/bolos.js";
-import searchRoutes from "./routes/search.js";
-import trafficRoutes from "./routes/traffic.js";
 import User from "./models/User.js";
 import Stripe from "stripe";
 
@@ -164,4 +158,5 @@ io.on("connection", (socket) => {
 server.listen(PORT, () => {
   console.log(`🚀 OpsLink API running on port ${PORT}`);
 });
+
 
