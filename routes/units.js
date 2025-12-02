@@ -24,22 +24,28 @@ router.post("/create", auth, async (req, res) => {
     }
 
     const unit = await Unit.create({
-      communityId,
-      userId: req.user.userId,
-      callsign,
-      name,
-      departmentId,
-      rank,
-      type,
-      status: "10-8"
-    });
+  communityId,
+  userId: req.user.userId,
+  callsign,
+  name,
+  departmentId: resolvedDeptId || departmentId,
+  rank,
+  type,
+  status: "10-8"
+});
 
-    // LIVE BROADCAST
+// Only broadcast if Socket.IO is available
+if (req.io) {
+  try {
     req.io.emit("unit:status", {
       unitId: unit._id,
       callsign: unit.callsign,
       status: "10-8"
     });
+  } catch (err) {
+    console.warn("Socket emit failed:", err.message);
+  }
+}
 
     return res.status(201).json(unit);
 
@@ -186,3 +192,4 @@ router.delete("/:unitId/delete", auth, async (req, res) => {
 
 
 export default router;
+
