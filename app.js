@@ -7,12 +7,14 @@ import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import communityRoutes from "./routes/community.js";
 import departmentRoutes from "./routes/departments.js";
-import unitRoutes from "./routes/units.js";
 import civilianRoutes from "./routes/civilians.js";
-import callRoutes from "./routes/calls.js";
-import searchRoutes from "./routes/search.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import mdtRoutes from "./routes/mdt.js";
+import unitRoutes from "./routes/units.js";
+import callRoutes from "./routes/calls.js";
+import boloRoutes from "./routes/bolos.js";
+import searchRoutes from "./routes/search.js";
+import trafficRoutes from "./routes/traffic.js";
 
 dotenv.config();
 connectDB();
@@ -38,6 +40,7 @@ app.use("/billing", billingRoutes);
 app.use("/mdt", mdtRoutes);
 
 export default app;
+
 
 
 
