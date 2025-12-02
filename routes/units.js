@@ -1,66 +1,62 @@
 import express from "express";
 import { auth } from "../middleware/auth.js";
-import Unit from "../models/Unit.js";
+import MDTUnitSession from "../models/MDTUnitSession.js";
 
 const router = express.Router();
 
 /* ============================================================
-   CREATE UNIT (First time going 10-8)
-   ============================================================ */
+   START MDT SESSION / CREATE UNIT
+============================================================ */
 router.post("/create", auth, async (req, res) => {
   try {
-    const { communityId, callsign, name, departmentId, rank, type } = req.body;
+    const { communityId, callsign, name, department, rank, type } = req.body;
 
-    // Prevent duplicate unit for same user in same community
-    const exists = await Unit.findOne({
+    if (!callsign || !communityId)
+      return res.status(400).json({ message: "Callsign and community required" });
+
+    // Prevent multiple active units for same user
+    const existing = await MDTUnitSession.findOne({
       communityId,
       userId: req.user.userId
     });
 
-    if (exists) {
+    if (existing) {
       return res.status(400).json({
-        message: "You already have a unit in this community."
+        message: "You already have an active MDT session."
       });
     }
 
-    const unit = await Unit.create({
-  communityId,
-  userId: req.user.userId,
-  callsign,
-  name,
-  departmentId: departmentId,
-  rank,
-  type,
-  status: "10-8"
-});
-
-// Only broadcast if Socket.IO is available
-if (req.io) {
-  try {
-    req.io.emit("unit:status", {
-      unitId: unit._id,
-      callsign: unit.callsign,
+    const unit = await MDTUnitSession.create({
+      communityId,
+      userId: req.user.userId,
+      callsign,
+      name,
+      department,
+      rank,
+      type,
       status: "10-8"
     });
-  } catch (err) {
-    console.warn("Socket emit failed:", err.message);
-  }
-}
+
+    if (req.io) {
+      req.io.emit("unit:status", {
+        unitId: unit._id,
+        callsign: unit.callsign,
+        status: "10-8"
+      });
+    }
 
     return res.status(201).json(unit);
-
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
 
-
 /* ============================================================
-   GET USER'S UNIT
-   ============================================================ */
+   GET MY CURRENT MDT SESSION
+============================================================ */
 router.get("/:communityId/me", auth, async (req, res) => {
   try {
-    const unit = await Unit.findOne({
+    const unit = await MDTUnitSession.findOne({
       communityId: req.params.communityId,
       userId: req.user.userId
     });
@@ -71,126 +67,110 @@ router.get("/:communityId/me", auth, async (req, res) => {
   }
 });
 
-
 /* ============================================================
-   GET ALL UNITS IN COMMUNITY
-   ============================================================ */
+   GET ALL ACTIVE UNITS IN COMMUNITY
+============================================================ */
 router.get("/:communityId", auth, async (req, res) => {
   try {
-    const units = await Unit.find({ communityId: req.params.communityId });
+    const units = await MDTUnitSession.find({
+      communityId: req.params.communityId
+    });
+
     return res.json(units);
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
 
-
 /* ============================================================
-   UPDATE STATUS (10-8, 10-7, ENROUTE, BUSY, etc)
-   ============================================================ */
+   UPDATE STATUS
+============================================================ */
 router.post("/:unitId/status", auth, async (req, res) => {
   try {
-    const { status } = req.body;
-
-    const updated = await Unit.findByIdAndUpdate(
+    const updated = await MDTUnitSession.findByIdAndUpdate(
       req.params.unitId,
-      { status, lastActive: Date.now() },
+      { status: req.body.status, lastActive: Date.now() },
       { new: true }
     );
 
-    req.io.emit("unit:status", updated);
-
+    req.io?.emit("unit:status", updated);
     return res.json(updated);
-
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
 
-
 /* ============================================================
-   UPDATE LOCATION (GPS)
-   ============================================================ */
+   UPDATE LOCATION
+============================================================ */
 router.post("/:unitId/location", auth, async (req, res) => {
   try {
     const { lat, lng } = req.body;
 
-    const updated = await Unit.findByIdAndUpdate(
+    const updated = await MDTUnitSession.findByIdAndUpdate(
       req.params.unitId,
       {
-        location: { lat, lng },
+        location: { lat, lng, updatedAt: Date.now() },
         lastActive: Date.now()
       },
       { new: true }
     );
 
-    req.io.emit("unit:location", updated);
-
+    req.io?.emit("unit:location", updated);
     return res.json(updated);
-
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
-
 
 /* ============================================================
    PANIC BUTTON
-   ============================================================ */
+============================================================ */
 router.post("/:unitId/panic", auth, async (req, res) => {
   try {
-    const updated = await Unit.findByIdAndUpdate(
+    const updated = await MDTUnitSession.findByIdAndUpdate(
       req.params.unitId,
-      { status: "panic" },
+      { status: "panic", lastActive: Date.now() },
       { new: true }
     );
 
-    req.io.emit("unit:panic", updated);
-
+    req.io?.emit("unit:panic", updated);
     return res.json(updated);
-
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
 
-
 /* ============================================================
-   SUPERVISOR: FORCE UNIT OFFLINE
-   ============================================================ */
+   FORCE UNIT OFFLINE (Supervisor)
+============================================================ */
 router.post("/:unitId/forceOffline", auth, async (req, res) => {
   try {
-    const updated = await Unit.findByIdAndUpdate(
+    const updated = await MDTUnitSession.findByIdAndUpdate(
       req.params.unitId,
-      { status: "10-7" },
+      { status: "10-7", lastActive: Date.now() },
       { new: true }
     );
 
-    req.io.emit("unit:forceOffline", updated);
-
+    req.io?.emit("unit:forceOffline", updated);
     return res.json(updated);
-
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
-
 
 /* ============================================================
-   DELETE UNIT (Admin / Owner)
-   ============================================================ */
-router.delete("/:unitId/delete", auth, async (req, res) => {
+   END SESSION (User logs out / page closes)
+============================================================ */
+router.delete("/:unitId/end", auth, async (req, res) => {
   try {
-    await Unit.findByIdAndDelete(req.params.unitId);
+    await MDTUnitSession.findByIdAndDelete(req.params.unitId);
+    req.io?.emit("unit:end", { unitId: req.params.unitId });
 
-    return res.json({ message: "Unit removed." });
-
+    return res.json({ message: "MDT session ended." });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
 
-
 export default router;
-
-
