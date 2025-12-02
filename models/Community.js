@@ -1,37 +1,93 @@
 import mongoose from "mongoose";
 
+/* ============================================================
+   RANKS — now support optional department linkage
+============================================================ */
 const RankSchema = new mongoose.Schema({
-  name: { type: String, required: true }
-}, { _id: true }); // allows rank._id
+  name: { type: String, required: true },
 
-const MemberSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, required: true },
-  role: { type: String, default: "member" }, // owner | admin | member
-  permissions: { type: [String], default: [] }
+  // OPTIONAL — if present, rank only applies to a single department
+  departmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Department",
+    default: null
+  }
+
 }, { _id: true });
 
+
+/* ============================================================
+   COMMUNITY MEMBERSHIP — stores permissions + role
+============================================================ */
+const MemberSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "User" },
+
+  // owner | admin | member
+  role: { type: String, default: "member" },
+
+  // Permission flags: ["leo","dispatch","fire","supervisor","admin"]
+  permissions: {
+    type: [String],
+    default: []
+  }
+
+}, { _id: true });
+
+
+/* ============================================================
+   COMMUNITY — main schema
+============================================================ */
 const CommunitySchema = new mongoose.Schema({
-  ownerId: { type: mongoose.Schema.Types.ObjectId, required: true },
 
-  name: { type: String, required: true },
-  description: { type: String },
-
-  settings: { type: Object, default: {} },
-
-  // SONORAN-STYLE PERMISSION KEYS
-  permissionKeys: {
-    leo: { type: String },
-    fire: { type: String },
-    dispatch: { type: String },
-    supervisor: { type: String },
-    admin: { type: String }
+  ownerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: "User"
   },
 
-  // Members with role + permissions
-  members: { type: [MemberSchema], default: [] },
+  name: {
+    type: String,
+    required: true
+  },
 
-  // Ranks system (missing before)
-  ranks: { type: [RankSchema], default: [] }
+  description: {
+    type: String,
+    default: ""
+  },
+
+  settings: {
+    type: Object,
+    default: {}
+  },
+
+  /* ================================
+     SONORAN-STYLE PERMISSION KEYS
+     Auto-grants permissions when claimed
+  ================================= */
+  permissionKeys: {
+    leo: { type: String, default: null },
+    fire: { type: String, default: null },
+    ems: { type: String, default: null },
+    dispatch: { type: String, default: null },
+    supervisor: { type: String, default: null },
+    admin: { type: String, default: null }
+  },
+
+  /* ================================
+     MEMBERS + ASSIGNED PERMISSIONS
+  ================================= */
+  members: {
+    type: [MemberSchema],
+    default: []
+  },
+
+  /* ================================
+     RANKS — now properly linked
+  ================================= */
+  ranks: {
+    type: [RankSchema],
+    default: []
+  }
 
 }, { timestamps: true });
 
