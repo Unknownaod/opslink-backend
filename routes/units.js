@@ -28,7 +28,7 @@ router.post("/create", auth, async (req, res) => {
   userId: req.user.userId,
   callsign,
   name,
-  departmentId: resolvedDeptId || departmentId,
+  departmentId: departmentId,
   rank,
   type,
   status: "10-8"
@@ -192,4 +192,5 @@ router.delete("/:unitId/delete", auth, async (req, res) => {
 
 
 export default router;
+
 
